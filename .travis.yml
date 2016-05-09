@@ -1,0 +1,23 @@
+language: python
+
+services:
+  - docker
+
+before_install:
+  - docker build -t agiovann/constrained_nmf .
+
+
+script:
+  - docker run -i -d -p 127.0.0.1:80:4567 agiovann/constrained_nmf /bin/sh -c "nosetests"
+  - docker ps -a
+  - docker run agiovann/constrained_nmf /bin/sh -c "nosetests"
+
+
+# whitelist
+branches:
+  only:
+    - testing
+    - CNMF2
+    - anaconda
+    - docker
+    - master

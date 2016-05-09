@@ -1,12 +1,21 @@
 
+!! NEW RELEASE INCLUDING IMPROVED MEMORY MANAGEMENT AND IMPROVED DETECTION !!
+=======================================================================
 
-Python translation of Constrained Non-negative Matrix Factorization algorithm for source extraction from calcium imaging data. 
+Please refer to the following wiki [page](https://github.com/agiovann/Constrained_NMF/wiki/Processing-large-datasets) or read in the testing section below
+
+ConstrainedNMF
+==============
+
+Python translation of Constrained Non-negative Matrix Factorization algorithm for source extraction from calcium imaging data.
 
 [![Join the chat at https://gitter.im/agiovann/SOURCE_EXTRACTION_PYTHON](https://badges.gitter.im/agiovann/SOURCE_EXTRACTION_PYTHON.svg)](https://gitter.im/agiovann/SOURCE_EXTRACTION_PYTHON?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
+<a href='https://travis-ci.org/agiovann/Constrained_NMF'><img src='https://secure.travis-ci.org/agiovann/Constrained_NMF.png?branch=testing'></a>
+
 # Deconvolution and demixing of calcium imaging data
 
-The code implements a method for simultaneous source extraction and spike inference from large scale calcium imaging movies. The code is suitable for the analysis of somatic imaging data. Implementation for the analysis of dendritic/axonal imaging data will be added in the future. 
+The code implements a method for simultaneous source extraction and spike inference from large scale calcium imaging movies. The code is suitable for the analysis of somatic imaging data. Implementation for the analysis of dendritic/axonal imaging data will be added in the future.
 
 The algorithm is presented in more detail in
 
@@ -16,11 +25,14 @@ Pnevmatikakis, E.A., Gao, Y., Soudry, D., Pfau, D., Lacefield, C., ... & Paninsk
 
 # Contributors
 
-Andrea Giovannucci and 
-Eftychios Pnevmatikakis 
-
+Andrea Giovannucci, Eftychios Pnevmatikakis, 
 Center for Computational Biology, Simons Foundation, New York, NY
 
+Valentina Staneva
+eScience Institute. University of Washinghton. Seattle, WA.
+
+Johannes Friedrich
+Columbia University, New York, NY. 
 
 Code description and related packages
 =======
@@ -31,7 +43,7 @@ This repository contains a Python implementation of the spatio-temporal demixing
 - [Source extraction with CNMF (this package)](https://github.com/agiovann/SOURCE_EXTRACTION_PYTHON)
 - [Group LASSO initialization and spatial CNMF](https://github.com/danielso/ROI_detect)
 
-## Matlab 
+## Matlab
 - [Constrained deconvolution and source extraction with CNMF](https://github.com/epnev/ca_source_extraction)
 - [MCMC spike inference](https://github.com/epnev/continuous_time_ca_sampler)
 - [Group LASSO initialization and spatial CNMF](https://github.com/danielso/ROI_detect)
@@ -46,7 +58,7 @@ Installation
 Installation on MAC OS
 ----------------------
 
-Download and install Anaconda (Python 2.7) <http://docs.continuum.io/anaconda/install> 
+Download and install Anaconda (Python 2.7) <http://docs.continuum.io/anaconda/install>
 
 1. EASY WAY. type:
     ```
@@ -55,9 +67,13 @@ Download and install Anaconda (Python 2.7) <http://docs.continuum.io/anaconda/in
     conda install -c https://conda.anaconda.org/agiovann constrained_nmf
     conda install  spyder
     conda install  atlas (only Ubuntu)
+    conda install accelerate
+    conda install opencv
+    conda install h5py
     pip install 'tifffile>=0.7'
     pip install picos
     pip install cvxpy
+    pip install pims
     ```
 
 2. ADVANCED WAY (with access to source code).
@@ -65,67 +81,82 @@ Download and install Anaconda (Python 2.7) <http://docs.continuum.io/anaconda/in
     git clone --recursive https://github.com/agiovann/Constrained_NMF.git
     conda create -n CNMF ipython
     source activate CNMF
-    conda install numpy scipy spyder openblas ipyparallel matplotlib bokeh jupyter scikit-image scikit-learn cvxopt             conda install  atlas (only Ubuntu)
+    conda install numpy scipy spyder openblas ipyparallel matplotlib bokeh jupyter scikit-image scikit-learn cvxopt         conda install  atlas (only Ubuntu)
+    conda install accelerate
+    conda install opencv
+    conda install h5py
     pip install 'tifffile>=0.7'
     pip install picos
     pip install cvxpy
-    
+    pip install pims
+
     ```
     This second option will not allow to import the package from every folder but only from within the Constrained_NMF folder. You can access it globally by setting the environment variable PYTHONPATH
     ```
     export PYTHONPATH="/path/to/Constrained_NMF:$PYTHONPATH"
     ```
-    
-    
+
+
 
 Troubleshooting
 ----------------
-**SCS**: 
+**SCS**:
 
-if you get errors compiling scs when installing cvxpy you probably need to create a link to openblas or libgfortran in 
-/usr/local/lib/, for instance: 
+if you get errors compiling scs when installing cvxpy you probably need to create a link to openblas or libgfortran in
+/usr/local/lib/, for instance:
 
 `sudo ln -s  /Library/Frameworks/R.framework/Libraries/libgfortran.3.dylib  /usr/local/lib/libgfortran.2.dylib`
 
 
- 
+
 **debian fortran compiler problems:**
 if you get the error  gcc: error trying to exec 'cc1plus': execvp: No such file or directory in ubuntu run
-or issues related to SCS type 
+or issues related to SCS type
 
  ```
- sudo apt-get install g++ libatlas-base-dev gfortran  libopenblas-dev 
+ sudo apt-get install g++ libatlas-base-dev gfortran  libopenblas-dev
  conda install openblas atlas
  ```
- 
- if still there are issues try 
- 
+
+ if still there are issues try
+
   `export LD_LIBRARY_PATH=/path_to_your_home/anaconda2/lib/`
 
 Test the system
 ----------------------
+
+**SINGLE PATCH**
+
 In case you used installation af point 1 above you will need to download the test files from
 <https://github.com/agiovann/Constrained_NMF/releases/download/v0.3/Demo.zip>
 
 A. Go into the cloned folder, type `python demo.py`
 
-B. Using the Spyder (type `conda install spyder`) IDE. 
-    
+B. Using the Spyder (type `conda install spyder`) IDE.
+
     1. Unzip the file Demo.zip (you do not need this step if you installed dusing method 2 above, just enter the Constrained_NMF folder and you will find all the required files there).
     2. Open the file demo.py with spyder
-    3. Change the current folder of the console to the 'Demo' folder
+    3. change the base_folder variable to point to the folder you just unzipped
     3. Run the cells one by one inspecting the output
-    4. Remember to stop the cluster (last three lines of file). You can also stop it manually by typing in a terminal 
+    4. Remember to stop the cluster (last three lines of file). You can also stop it manually by typing in a terminal
     'ipcluster stop'
 
-C. Using notebook. 
-    
+C. Using notebook.
+
     1. Unzip the file Demo.zip (you do not need this step if you installed dusing method 3 above, just enter the Constrained_NMF folder and you will find all the required files there).
     2. type `ipython notebook`
-    3. open the notebook called demoCNMF.ipynb and run cell by cell inspecting the result
-    4. Remember to stop the cluster (last three lines of file). You can also stop it manually by typing in a terminal 
+    3. open the notebook called demoCNMF.ipynb 
+    4. change the base_folder variable to point to the folder you just unzipped
+    5. and run cell by cell inspecting the result
+    6. Remember to stop the cluster (last three lines of file). You can also stop it manually by typing in a terminal
     'ipcluster stop'
-    
+
+
+**MULTI PATCH**
++ Download the two demo movies [here](https://github.com/agiovann/Constrained_NMF/releases/download/v0.4-alpha/Patch_demo.zip) (courtesy of Dr. Sue Ann Koay from the Tank Lab, Princeton Neuroscience Institute, Princeton. NJ). Unzip the folder. Then in Spyder open the file demo_patches.py, and change the base_folder variable to point to the folder you just unzipped. 
++ Run one by one the cells (delimited by '#%%') 
++ Inspect the results. The demo will start a cluster and process pathes of the movie (more details [here](https://github.com/agiovann/Constrained_NMF/wiki/Processing-large-datasets)) in parallel (cse.map_reduce.run_CNMF_patches). Afterwards, it will merge the results back together and proceed to firstly merge potentially overlaping components (cse.merge_components) from different patches, secondly to update the spatial extent of the joined spatial components (cse.spatial.update_spatial_components), and finally denoising the traces (cse.temporal.update_temporal_components). THe final bit is used for visualization. 
+
 Documentation
 ========
 
@@ -164,7 +195,7 @@ Please use the gitter chat room (use the button above) for questions and comment
 
 Important note
 ======
-The implementation of this package is based on the matlab implementation which can be found [here](https://github.com/epnev/ca_source_extraction). Some of the Matlab features are currently lacking, but will be included in future releases. 
+The implementation of this package is based on the matlab implementation which can be found [here](https://github.com/epnev/ca_source_extraction). Some of the Matlab features are currently lacking, but will be included in future releases.
 
 License
 =======

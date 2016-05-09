@@ -12,6 +12,7 @@ from sklearn.decomposition import NMF
 from scipy.sparse import lil_matrix,coo_matrix
 import time
 import scipy
+from utilities import load_memmap
  
 #%%
 def extract_patch_coordinates(d1,d2,rf=7,stride = 5):
@@ -28,10 +29,12 @@ def extract_patch_coordinates(d1,d2,rf=7,stride = 5):
     """
     coords_flat=[]
     coords_2d=[]
-    for xx in range(stride,d1+stride,2*rf-stride):   
-        for yy in range(stride,d2+stride,2*rf-stride):
+    for xx in range(rf,d1-rf,2*rf-stride)+[d1-rf]:   
+        for yy in range(rf,d2-rf,2*rf-stride)+[d2-rf]:
+            
             coords_x=np.array(range(xx - rf, xx + rf + 1))     
             coords_y=np.array(range(yy - rf, yy + rf + 1))  
+            print([xx - rf, xx + rf + 1,yy - rf, yy + rf + 1])
             coords_y = coords_y[(coords_y >= 0) & (coords_y < d2)]
             coords_x = coords_x[(coords_x >= 0) & (coords_x < d1)]
             idxs = np.meshgrid( coords_x,coords_y)
@@ -88,17 +91,35 @@ def extract_rois_patch(file_name,d1,d2,rf=5,stride = 5):
 def cnmf_patches(args_in):
     import numpy as np
     import ca_source_extraction as cse
-    
+    import time
+    import logging
+
+        
 #    file_name, idx_,shapes,p,gSig,K,fudge_fact=args_in
     file_name, idx_,shapes,options=args_in
     
+    name_log=file_name[:-5]+ '_LOG_ ' + str(idx_[0])+'_'+str(idx_[-1])
+    logger = logging.getLogger(name_log)
+    hdlr = logging.FileHandler('./'+name_log)
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    hdlr.setFormatter(formatter)
+    logger.addHandler(hdlr) 
+    logger.setLevel(logging.INFO)
+        
+    
+    
     p=options['temporal_params']['p']
     
-    Yr=np.load(file_name,mmap_mode='r')
+    logger.info('START')
+    Yr,_,_,_=load_memmap(file_name)    
+    logger.info('Read file')
+    
+        
     Yr=Yr[idx_,:]
+    Yr.filename=file_name
     d,T=Yr.shape      
     Y=np.reshape(Yr,(shapes[1],shapes[0],T),order='F')  
-    
+    Y.filename=file_name
 #    ssub,tsub = options['patch_params']['ssub'],options['patch_params']['tsub']
 #    if ssub>1 or tsub>1:
 #        Y = cse.initialization.downscale_local_mean(Y,(ssub,ssub,tsub))
@@ -111,33 +132,38 @@ def cnmf_patches(args_in):
 #    options = cse.utilities.CNMFSetParms(Y,p=p,gSig=gSig,K=K)
     options['spatial_params']['d2']=d1
     options['spatial_params']['d1']=d2
-    options['spatial_params']['backend']='single_thread'
-    options['temporal_params']['backend']='single_thread'
     
-    Yr,sn,g=cse.pre_processing.preprocess_data(Yr,**options['preprocess_params'])
+    
+    Yr,sn,g,psx=cse.pre_processing.preprocess_data(Yr,**options['preprocess_params'])
+    logger.info('Preprocess Data')
+    
     Ain, Cin, b_in, f_in, center=cse.initialization.initialize_components(Y, **options['init_params']) 
-                                                       
-    print options
+    logger.info('Initialize Components')                                                       
+
     A,b,Cin = cse.spatial.update_spatial_components(Yr, Cin, f_in, Ain, sn=sn, **options['spatial_params'])  
     options['temporal_params']['p'] = 0 # set this to zero for fast updating without deconvolution
+    logger.info('Spatial Update')                                                           
+    
     
     C,f,S,bl,c1,neurons_sn,g,YrA = cse.temporal.update_temporal_components(Yr,A,b,Cin,f_in,bl=None,c1=None,sn=None,g=None,**options['temporal_params'])
+    logger.info('Temporal Update')  
     
-    A_m,C_m,nr_m,merged_ROIs,S_m,bl_m,c1_m,sn_m,g_m=cse.merging.merge_components(Yr,A,b,C,f,S,sn,options['temporal_params'], options['spatial_params'], bl=bl, c1=c1, sn=neurons_sn, g=g, thr=0.8, fast_merge = True)
+    A_m,C_m,nr_m,merged_ROIs,S_m,bl_m,c1_m,sn_m,g_m=cse.merging.merge_components(Yr,A,b,C,f,S,sn,options['temporal_params'], options['spatial_params'], bl=bl, c1=c1, sn=neurons_sn, g=g, thr=options['merging']['thr'], fast_merge = True)
+    logger.info('Merge Components')                                                       
     
     A2,b2,C2 = cse.spatial.update_spatial_components(Yr, C_m, f, A_m, sn=sn, **options['spatial_params'])
+    logger.info('Update Spatial II')                                                       
     options['temporal_params']['p'] = p # set it back to original value to perform full deconvolution
     C2,f2,S2,bl2,c12,neurons_sn2,g21,YrA = cse.temporal.update_temporal_components(Yr,A2,b2,C2,f,bl=None,c1=None,sn=None,g=None,**options['temporal_params'])
-    
+    logger.info('Update Temporal II')                                                       
     Y=[]
     Yr=[]
     
     return idx_,shapes,A2,b2,C2,f2,S2,bl2,c12,neurons_sn2,g21,sn,options
 
 #%%
-def run_CNMF_patches(file_name, shape, options, rf=16, stride = 4, n_processes=2, backend='single_thread'):
-    """
-    Function that runs CNMF in patches, either in parallel or sequentiually, and return the result for each. It requires that ipyparallel is running
+def run_CNMF_patches(file_name, shape, options, rf=16, stride = 4, n_processes=2, backend='single_thread',memory_fact=1):
+    """Function that runs CNMF in patches, either in parallel or sequentiually, and return the result for each. It requires that ipyparallel is running
         
     Parameters
     ----------        
@@ -159,23 +185,38 @@ def run_CNMF_patches(file_name, shape, options, rf=16, stride = 4, n_processes=2
     backend: string
         'ipyparallel' or 'single_thread'
     
+    n_processes: int
+        nuber of cores to be used (should be less than the number of cores started with ipyparallel)
+        
+    memory_fact: double
+        unitless number accounting how much memory should be used. It represents the fration of patch processed in a single thread. You will need to try different values to see which one would work
+    
     
     Returns
     -------
-    A_tot:
+    A_tot: matrix containing all the componenents from all the patches
     
-    C_tot:
+    C_tot: matrix containing the calcium traces corresponding to A_tot
     
-    sn_tot:
+    sn_tot: per pixel noise estimate
     
-    optional_outputs:    
+    optional_outputs: set of outputs related to the result of CNMF ALGORITHM ON EACH patch   
     """
     (d1,d2,T)=shape
     d=d1*d2
     K=options['init_params']['K']
     
-    idx_flat,idx_2d=extract_patch_coordinates(d1, d2, rf=rf, stride = stride)
+    options['preprocess_params']['backend']='single_thread' 
+    options['preprocess_params']['n_pixels_per_process']=np.int((rf*rf)/memory_fact)
+    options['spatial_params']['n_pixels_per_process']=np.int((rf*rf)/memory_fact)
+    options['temporal_params']['n_pixels_per_process']=np.int((rf*rf)/memory_fact)
+    options['spatial_params']['backend']='single_thread'
+    options['temporal_params']['backend']='single_thread'
+
     
+    idx_flat,idx_2d=extract_patch_coordinates(d1, d2, rf=rf, stride = stride)
+#    import pdb 
+#    pdb.set_trace()
     args_in=[]    
     for id_f,id_2d in zip(idx_flat[:],idx_2d[:]):        
         args_in.append((file_name, id_f,id_2d[0].shape, options))
@@ -191,13 +232,16 @@ def run_CNMF_patches(file_name, shape, options, rf=16, stride = 4, n_processes=2
             c = Client()   
             dview=c[:n_processes]
             file_res = dview.map_sync(cnmf_patches, args_in)        
-
-        finally:
-            
             dview.results.clear()   
             c.purge_results('all')
             c.purge_everything()
-            c.close()                   
+            c.close()         
+        except:
+            print('Something went wrong')  
+            raise
+        finally:
+            print('You may think that it went well but reality is harsh')
+                    
 
     elif backend is 'single_thread':
 
@@ -214,7 +258,10 @@ def run_CNMF_patches(file_name, shape, options, rf=16, stride = 4, n_processes=2
     num_patches=len(file_res)
     
     A_tot=scipy.sparse.csc_matrix((d,K*num_patches))
+    B_tot=scipy.sparse.csc_matrix((d,num_patches))
     C_tot=np.zeros((K*num_patches,T))
+    F_tot=np.zeros((num_patches,T))
+    mask=np.zeros(d)
     sn_tot=np.zeros((d1*d2))
     b_tot=[]
     f_tot=[]
@@ -242,6 +289,9 @@ def run_CNMF_patches(file_name, shape, options, rf=16, stride = 4, n_processes=2
         g_tot.append(g)
         idx_tot.append(idx_)
         shapes_tot.append(shapes)
+        mask[idx_] += 1
+        F_tot[patch_id,:]=f
+        B_tot[idx_,patch_id]=b        
         
         for ii in range(np.shape(A)[-1]):            
             new_comp=A.tocsc()[:,ii]/np.sqrt(np.sum(np.array(A.tocsc()[:,ii].todense())**2))
@@ -266,7 +316,20 @@ def run_CNMF_patches(file_name, shape, options, rf=16, stride = 4, n_processes=2
     optional_outputs['idx_tot']=idx_tot
     optional_outputs['shapes_tot']=shapes_tot
     optional_outputs['id_patch_tot']= id_patch_tot
+    optional_outputs['B'] = B_tot
+    optional_outputs['F'] = F_tot
+    optional_outputs['mask'] = mask
     
-    return A_tot,C_tot,sn_tot, optional_outputs
+    Im = scipy.sparse.csr_matrix((1./mask,(np.arange(d),np.arange(d))))
+    Bm = Im.dot(B_tot)
+    A_tot = Im.dot(A_tot)
+    f = np.mean(F_tot,axis=0)
+
+    for iter in range(10):
+        b = Bm.dot(F_tot.dot(f))/np.sum(f**2)  
+        f = np.dot((Bm.T.dot(b)).T,F_tot)/np.sum(b**2)
+
+    
+    return A_tot,C_tot,b,f,sn_tot, optional_outputs
 
 

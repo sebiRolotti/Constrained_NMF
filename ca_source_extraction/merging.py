@@ -164,7 +164,10 @@ sn: float
                     aa = Acsc.dot(Ctmp.dot(cc.T))/(cc*cc.T)
                 
 #                nC = np.sqrt(np.sum(A.toarray()[:,merged_ROI]**2,axis=0))*np.sqrt(np.sum(C[merged_ROI,:]**2,axis=1))
-                nC = np.sqrt(np.sum(Acsd**2,axis=0))*np.sqrt(np.sum(Ctmp**2,axis=1))
+                nC = np.sqrt(np.sum(Acsd**2,axis=0))*np.sqrt(np.sum(Ctmp**2,axis=1))            
+                nA = np.sqrt(np.sum(np.array(aa)**2))
+                aa /= nA
+                cc *= nA
 
                 indx = np.argmax(nC)
                 
@@ -235,5 +238,5 @@ sn: float
         print('********** No neurons merged! ***************')        
         merged_ROIs=[];        
         
-    return A,C,nr,merged_ROIs,S,bl,c1,sn,g   
+    return A,C,nr,merged_ROIs,S,bl,c1,sn,g
     
